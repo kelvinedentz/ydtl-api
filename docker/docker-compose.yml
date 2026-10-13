@@ -1,0 +1,52 @@
+x-app: &app
+  build:
+    context: ..
+    dockerfile: docker/Dockerfile
+  env_file: ../.env
+  environment:
+    REDIS_URL: redis://redis:6379/0 # overrides the localhost value in .env
+  depends_on:
+    redis:
+      condition: service_healthy
+  restart: unless-stopped
+
+services:
+  api:
+    <<: *app
+    ports:
+      - "127.0.0.1:8000:8000"
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')",
+        ]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+  worker:
+    <<: *app
+    command: ["python", "-m", "app.worker.run", "worker"]
+    stop_grace_period: 120s # lets a running download finish on shutdown
+
+  sweeper:
+    <<: *app
+    command: ["python", "-m", "app.worker.run", "sweeper"]
+
+  redis:
+    image: redis:7-alpine
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    restart: unless-stopped
+
+volumes:
+  redis-data:

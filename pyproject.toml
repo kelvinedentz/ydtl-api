@@ -1,0 +1,53 @@
+[project]
+name = "ydtl-api"
+version = "0.1.0"
+description = "YouTube/media downloader API"
+readme = "README.md"
+authors = [
+    { name = "kelvin", email = "edentz.emails@gmail.com" }
+]
+requires-python = ">=3.12.3"
+dependencies = [
+    "boto3>=1.43.111",
+    "fastapi>=0.143.0",
+    "pydantic-settings>=2.15.0",
+    "redis>=8.1.0",
+    "rq>=2.12.0",
+    "uvicorn[standard]>=0.54.0",
+    "yt-dlp[default]>=2026.8.19",
+]
+
+[dependency-groups]
+dev = [
+    "httpx>=0.28.1",
+    "poethepoet>=0.48.0",
+    "pytest>=9.1.1",
+    "ruff>=0.17.0",
+]
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]
+
+[tool.ruff]
+line-length = 100
+src = ["src"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]
+
+[tool.ruff.lint.flake8-bugbear]
+extend-immutable-calls = ["fastapi.Depends", "fastapi.Query", "fastapi.Header"]
+
+[tool.poe.tasks]
+dev = "uvicorn app.main:app --reload --app-dir src"
+test = "pytest"
+lint = "ruff check ."
+fmt = "ruff format ."
+
+[tool.poe.tasks.worker]
+cmd = "python -m app.worker.run worker"
+env = { PYTHONPATH = "src" }
+
+[tool.poe.tasks.sweeper]
+cmd = "python -m app.worker.run sweeper"
+env = { PYTHONPATH = "src" }
