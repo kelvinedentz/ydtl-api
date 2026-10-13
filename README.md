@@ -662,4 +662,4 @@ Downloading content from some websites can violate their terms of service, and w
 
 ## License
 
-Add your license here.
+MIT
