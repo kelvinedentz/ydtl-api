@@ -4,7 +4,7 @@ x-app: &app
     dockerfile: docker/Dockerfile
   env_file: ../.env
   environment:
-    REDIS_URL: redis://redis:6379/0 # overrides the localhost value in .env
+    REDIS_URL: redis://redis:6379/0
   depends_on:
     redis:
       condition: service_healthy
@@ -13,16 +13,19 @@ x-app: &app
 services:
   api:
     <<: *app
+    command:
+      - uvicorn
+      - app.main:app
+      - --host
+      - 0.0.0.0
+      - --port
+      - "8000"
+      - --proxy-headers
+      - --forwarded-allow-ips=*
     ports:
-      - "127.0.0.1:8000:8000"
+      - "127.0.0.1:8000:8000" 
     healthcheck:
-      test:
-        [
-          "CMD",
-          "python",
-          "-c",
-          "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')",
-        ]
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
       interval: 30s
       timeout: 5s
       retries: 3
@@ -30,7 +33,7 @@ services:
   worker:
     <<: *app
     command: ["python", "-m", "app.worker.run", "worker"]
-    stop_grace_period: 120s # lets a running download finish on shutdown
+    stop_grace_period: 120s   # lets a running download finish on shutdown
 
   sweeper:
     <<: *app
