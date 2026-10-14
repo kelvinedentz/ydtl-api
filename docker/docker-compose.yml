@@ -5,11 +5,11 @@ x-app: &app
   env_file: ../.env
   environment:
     REDIS_URL: redis://redis:6379/0
-    YTDLP_COOKIES: /app/cookies.txt
-  volumes:
-    - ../cookies.txt:/app/cookies.txt:ro
+    YTDLP_POT_BASE_URL: http://pot-provider:4416
   depends_on:
     redis:
+      condition: service_healthy
+    pot-provider:
       condition: service_healthy
   restart: unless-stopped
 
@@ -47,6 +47,16 @@ services:
   sweeper:
     <<: *app
     command: ["python", "-m", "app.worker.run", "sweeper"]
+    
+  pot-provider:
+    image: brainicism/bgutil-ytdlp-pot-provider:latest
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:4416/ping || exit 1"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 15s
+    restart: unless-stopped
 
   redis:
     image: redis:7-alpine
