@@ -6,7 +6,10 @@ from app.models.schemas import AudioOption, MediaInfo, VideoQuality
 AudioFormat = Literal["mp3", "m4a"]
 
 STANDARD_HEIGHTS = (1080, 720, 480, 360)
-AUDIO_BITRATES: dict[AudioFormat, int] = {"mp3": 192, "m4a": 256}  # must match downloader.py
+AUDIO_BITRATES: dict[AudioFormat, int] = {
+    "mp3": 192,
+    "m4a": 256,
+}  # must match downloader.py
 
 
 def _res(f: Any) -> int:
@@ -41,7 +44,9 @@ def build_info(raw: Any) -> MediaInfo:
     audios = [f for f in formats if _has(f, "acodec") and not _has(f, "vcodec")]
     duration = int(raw["duration"]) if raw.get("duration") else None
 
-    best_audio = max(audios, key=lambda f: f.get("abr") or f.get("tbr") or 0, default=None)
+    best_audio = max(
+        audios, key=lambda f: f.get("abr") or f.get("tbr") or 0, default=None
+    )
     audio_size = _size(best_audio, duration) if best_audio else None
     limit = get_settings().max_file_size_mb * 1024 * 1024
 
@@ -84,6 +89,7 @@ def build_info(raw: Any) -> MediaInfo:
     return MediaInfo(
         title=raw.get("title") or "Untitled",
         uploader=raw.get("uploader") or raw.get("channel"),
+        view_count=raw.get("view_count"),
         duration=duration,
         thumbnail=thumbnail,
         webpage_url=raw.get("webpage_url") or raw.get("original_url") or "",
