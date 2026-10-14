@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, date
 from enum import StrEnum
 from typing import Literal
 
@@ -86,6 +86,7 @@ class MediaInfo(BaseModel):
     uploader: str | None = None
     duration: int | None = None
     view_count: int | None = None
+    pub_date: date | None = None
     thumbnail: str | None = None
     webpage_url: str
     site: str | None = None
