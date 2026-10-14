@@ -84,10 +84,11 @@ class AudioOption(BaseModel):
 class MediaInfo(BaseModel):
     title: str
     uploader: str | None = None
-    duration: int | None = None  # seconds
+    duration: int | None = None
+    view_count: int | None = None
     thumbnail: str | None = None
     webpage_url: str
     site: str | None = None
-    max_file_size: int  # bytes, the server's limit
+    max_file_size: int
     video: list[VideoQuality]
     audio: list[AudioOption]
