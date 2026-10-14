@@ -1,10 +1,7 @@
 import logging
 import os
 import re
-import shutil
-import tempfile
-from collections.abc import Callable, Iterator
-from contextlib import contextmanager
+from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, cast
@@ -19,8 +16,13 @@ log = logging.getLogger(__name__)
 
 _ANSI = re.compile(r"\x1b\[[0-9;]*m")
 
-# Mounted from the host by docker-compose. Optional: without it, yt-dlp runs without cookies.
-COOKIE_FILE = Path(os.getenv("YTDLP_COOKIES", "/app/cookies.txt"))
+# Base URL of the bgutil PO Token provider
+POT_BASE_URL = os.getenv("YTDLP_POT_BASE_URL", "http://pot-provider:4416")
+
+
+POT_EXTRACTOR_ARGS: dict[str, Any] = {
+    "youtubepot-bgutilhttp": {"base_url": POT_BASE_URL},
+}
 
 
 class DownloadFailed(Exception):
@@ -38,31 +40,6 @@ class DownloadResult:
     title: str
     download_name: str  # friendly name for the browser's save dialog
     size: int  # bytes
-
-
-@contextmanager
-def _cookie_opts() -> Iterator[dict[str, Any]]:
-    """Yield yt-dlp options that point at a private copy of the cookie file.
-
-    yt-dlp rewrites its cookie file when it closes. The API (several threads)
-    and the worker would all write to the same mounted file, so each call gets
-    its own temporary copy instead. That also means the mount can be read-only.
-    Refreshed cookies are not saved back: re-export cookies.txt if they expire.
-    """
-    if not COOKIE_FILE.is_file():
-        yield {}
-        return
-    with tempfile.TemporaryDirectory(prefix="ytdlp-cookies-") as tmp:
-        copy = Path(tmp) / "cookies.txt"
-        try:
-            shutil.copyfile(COOKIE_FILE, copy)
-        except OSError:
-            log.warning(
-                "Cannot read cookie file %s, continuing without it", COOKIE_FILE
-            )
-            yield {}
-            return
-        yield {"cookiefile": str(copy)}
 
 
 def _video_format(quality: str) -> str:
@@ -132,6 +109,7 @@ def download(
         "socket_timeout": 30,
         "retries": 3,
         "restrictfilenames": True,
+        "extractor_args": POT_EXTRACTOR_ARGS,
     }
 
     if media_type == MediaType.AUDIO:
@@ -159,11 +137,7 @@ def download(
         opts["merge_output_format"] = "mp4"
 
     try:
-        # The cookie copy lives until YoutubeDL has closed (it saves cookies on close).
-        with (
-            _cookie_opts() as cookie_opts,
-            YoutubeDL(cast(Any, {**opts, **cookie_opts})) as ydl,
-        ):
+        with YoutubeDL(cast(Any, opts)) as ydl:
             info = ydl.extract_info(url, download=True)
     except DownloadFailed:
         raise
@@ -215,12 +189,10 @@ def fetch_info(url: str) -> Any:
         "no_warnings": True,
         "socket_timeout": 15,
         "retries": 1,
+        "extractor_args": POT_EXTRACTOR_ARGS,
     }
     try:
-        with (
-            _cookie_opts() as cookie_opts,
-            YoutubeDL(cast(Any, {**opts, **cookie_opts})) as ydl,
-        ):
+        with YoutubeDL(cast(Any, opts)) as ydl:
             info = ydl.extract_info(url, download=False)
     except DownloadError as exc:
         msg = _clean_error(exc)
