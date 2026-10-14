@@ -22,6 +22,10 @@ _ANSI = re.compile(r"\x1b\[[0-9;]*m")
 # Mounted from the host by docker-compose. Optional: without it, yt-dlp runs without cookies.
 COOKIE_FILE = Path(os.getenv("YTDLP_COOKIES", "/app/cookies.txt"))
 
+# Target bitrates (kbps) for FFmpegExtractAudio. For "opus" this only applies when the
+# source is not already Opus; an Opus source is copied as-is (see download()).
+AUDIO_QUALITY = {"mp3": "192", "m4a": "256", "opus": "192"}
+
 
 class DownloadFailed(Exception):
     """Raised for any failed download. tasks.py stores code and message on the job."""
@@ -57,7 +61,9 @@ def _cookie_opts() -> Iterator[dict[str, Any]]:
         try:
             shutil.copyfile(COOKIE_FILE, copy)
         except OSError:
-            log.warning("Cannot read cookie file %s, continuing without it", COOKIE_FILE)
+            log.warning(
+                "Cannot read cookie file %s, continuing without it", COOKIE_FILE
+            )
             yield {}
             return
         yield {"cookiefile": str(copy)}
@@ -82,7 +88,11 @@ def _find_output(info: Any, dest_dir: Path) -> Path | None:
         if p and Path(p).exists():
             return Path(p)
     # Fallback: the largest finished file in the temp dir.
-    files = [p for p in dest_dir.iterdir() if p.is_file() and p.suffix not in (".part", ".ytdl")]
+    files = [
+        p
+        for p in dest_dir.iterdir()
+        if p.is_file() and p.suffix not in (".part", ".ytdl")
+    ]
     return max(files, key=lambda p: p.stat().st_size) if files else None
 
 
@@ -129,40 +139,48 @@ def download(
     }
 
     if media_type == MediaType.AUDIO:
-        # Take the best available source (YouTube's best audio is Opus ~160k,
-        # better than the AAC ~128k stream), then encode to the target codec.
-        opts["format"] = "bestaudio/best"
-        if audio_format == "m4a":
-            opts["postprocessors"] = [
-                {
-                    "key": "FFmpegExtractAudio",
-                    "preferredcodec": "m4a",
-                    "preferredquality": "256",
-                }
-            ]
+        if audio_format == "opus":
+            # Prefer a real Opus stream (YouTube's best audio). FFmpegExtractAudio sees
+            # that the codec already matches and copies it, so there is no quality loss
+            # and the result matches the bitrate and size that info.py reports.
+            # Sites without an Opus stream fall back to the best stream, encoded with
+            # libopus at AUDIO_QUALITY["opus"] kbps.
+            opts["format"] = "bestaudio[acodec^=opus]/bestaudio/best"
         else:
-            opts["postprocessors"] = [
-                {
-                    "key": "FFmpegExtractAudio",
-                    "preferredcodec": audio_format,
-                    "preferredquality": "192",
-                }
-            ]
+            # Take the best available source (YouTube's best audio is Opus ~160k,
+            # better than the AAC ~128k stream), then encode to the target codec.
+            opts["format"] = "bestaudio/best"
+        opts["postprocessors"] = [
+            {
+                "key": "FFmpegExtractAudio",
+                "preferredcodec": audio_format,
+                "preferredquality": AUDIO_QUALITY.get(audio_format, "192"),
+            }
+        ]
     else:
         opts["format"] = _video_format(quality)
         opts["merge_output_format"] = "mp4"
 
     try:
         # The cookie copy lives until YoutubeDL has closed (it saves cookies on close).
-        with _cookie_opts() as cookie_opts, YoutubeDL(cast(Any, {**opts, **cookie_opts})) as ydl:
+        with (
+            _cookie_opts() as cookie_opts,
+            YoutubeDL(cast(Any, {**opts, **cookie_opts})) as ydl,
+        ):
             info = ydl.extract_info(url, download=True)
     except DownloadFailed:
         raise
     except DownloadError as exc:
         if state["too_large"]:
-            raise DownloadFailed(ErrorCode.TOO_LARGE, "File exceeds the size limit.") from exc
+            raise DownloadFailed(
+                ErrorCode.TOO_LARGE, "File exceeds the size limit."
+            ) from exc
         msg = _clean_error(exc)
-        code = ErrorCode.UNSUPPORTED_SITE if "Unsupported URL" in msg else ErrorCode.DOWNLOAD_FAILED
+        code = (
+            ErrorCode.UNSUPPORTED_SITE
+            if "Unsupported URL" in msg
+            else ErrorCode.DOWNLOAD_FAILED
+        )
         raise DownloadFailed(code, msg) from exc
 
     if not info:
@@ -186,7 +204,9 @@ def download(
 
     title = entry.get("title") or "download"
     download_name = f"{sanitize_filename(title)[:100]}{path.suffix}"
-    return DownloadResult(path=path, title=title, download_name=download_name, size=size)
+    return DownloadResult(
+        path=path, title=title, download_name=download_name, size=size
+    )
 
 
 def fetch_info(url: str) -> Any:
@@ -200,11 +220,18 @@ def fetch_info(url: str) -> Any:
         "retries": 1,
     }
     try:
-        with _cookie_opts() as cookie_opts, YoutubeDL(cast(Any, {**opts, **cookie_opts})) as ydl:
+        with (
+            _cookie_opts() as cookie_opts,
+            YoutubeDL(cast(Any, {**opts, **cookie_opts})) as ydl,
+        ):
             info = ydl.extract_info(url, download=False)
     except DownloadError as exc:
         msg = _clean_error(exc)
-        code = ErrorCode.UNSUPPORTED_SITE if "Unsupported URL" in msg else ErrorCode.DOWNLOAD_FAILED
+        code = (
+            ErrorCode.UNSUPPORTED_SITE
+            if "Unsupported URL" in msg
+            else ErrorCode.DOWNLOAD_FAILED
+        )
         raise DownloadFailed(code, msg) from exc
 
     if not info:

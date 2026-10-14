@@ -35,7 +35,7 @@ class JobCreate(BaseModel):
     url: HttpUrl
     type: MediaType = MediaType.VIDEO
     quality: Literal["best", "1080p", "720p", "480p", "360p"] = "best"  # video only
-    audio_format: Literal["mp3", "m4a"] = "mp3"  # audio only
+    audio_format: Literal["mp3", "m4a", "opus"] = "mp3"  # audio only
 
 
 # ---------- Responses ----------
@@ -76,7 +76,7 @@ class VideoQuality(BaseModel):
 
 
 class AudioOption(BaseModel):
-    format: Literal["mp3", "m4a"]  # usable as JobCreate.audio_format
+    format: Literal["mp3", "m4a", "opus"]  # usable as JobCreate.audio_format
     bitrate_kbps: int
     filesize: int | None = None  # estimate from duration x bitrate
 
