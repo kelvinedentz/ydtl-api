@@ -1,5 +1,10 @@
+import logging
+import os
 import re
-from collections.abc import Callable
+import shutil
+import tempfile
+from collections.abc import Callable, Iterator
+from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, cast
@@ -10,7 +15,12 @@ from yt_dlp.utils import DownloadError, match_filter_func, sanitize_filename
 from app.config import get_settings
 from app.models.schemas import ErrorCode, MediaType
 
+log = logging.getLogger(__name__)
+
 _ANSI = re.compile(r"\x1b\[[0-9;]*m")
+
+# Mounted from the host by docker-compose. Optional: without it, yt-dlp runs without cookies.
+COOKIE_FILE = Path(os.getenv("YTDLP_COOKIES", "/app/cookies.txt"))
 
 
 class DownloadFailed(Exception):
@@ -28,6 +38,29 @@ class DownloadResult:
     title: str
     download_name: str  # friendly name for the browser's save dialog
     size: int  # bytes
+
+
+@contextmanager
+def _cookie_opts() -> Iterator[dict[str, Any]]:
+    """Yield yt-dlp options that point at a private copy of the cookie file.
+
+    yt-dlp rewrites its cookie file when it closes. The API (several threads)
+    and the worker would all write to the same mounted file, so each call gets
+    its own temporary copy instead. That also means the mount can be read-only.
+    Refreshed cookies are not saved back: re-export cookies.txt if they expire.
+    """
+    if not COOKIE_FILE.is_file():
+        yield {}
+        return
+    with tempfile.TemporaryDirectory(prefix="ytdlp-cookies-") as tmp:
+        copy = Path(tmp) / "cookies.txt"
+        try:
+            shutil.copyfile(COOKIE_FILE, copy)
+        except OSError:
+            log.warning("Cannot read cookie file %s, continuing without it", COOKIE_FILE)
+            yield {}
+            return
+        yield {"cookiefile": str(copy)}
 
 
 def _video_format(quality: str) -> str:
@@ -120,7 +153,8 @@ def download(
         opts["merge_output_format"] = "mp4"
 
     try:
-        with YoutubeDL(cast(Any, opts)) as ydl:
+        # The cookie copy lives until YoutubeDL has closed (it saves cookies on close).
+        with _cookie_opts() as cookie_opts, YoutubeDL(cast(Any, {**opts, **cookie_opts})) as ydl:
             info = ydl.extract_info(url, download=True)
     except DownloadFailed:
         raise
@@ -166,7 +200,7 @@ def fetch_info(url: str) -> Any:
         "retries": 1,
     }
     try:
-        with YoutubeDL(cast(Any, opts)) as ydl:
+        with _cookie_opts() as cookie_opts, YoutubeDL(cast(Any, {**opts, **cookie_opts})) as ydl:
             info = ydl.extract_info(url, download=False)
     except DownloadError as exc:
         msg = _clean_error(exc)
