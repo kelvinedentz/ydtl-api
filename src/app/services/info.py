@@ -1,29 +1,17 @@
-from typing import Any, Literal
 from datetime import date, datetime, timezone
+from typing import Any, Literal
+
 from app.config import get_settings
 from app.models.schemas import AudioOption, MediaInfo, VideoQuality
 
+# Formats we re-encode to.
 AudioFormat = Literal["mp3", "m4a"]
 
 STANDARD_HEIGHTS = (1080, 720, 480, 360)
 AUDIO_BITRATES: dict[AudioFormat, int] = {
     "mp3": 192,
     "m4a": 256,
-}  # must match downloader.py
-
-
-def _pub_date(raw: Any) -> date | None:
-    """Publication date: upload_date ('YYYYMMDD'), else release_date, else a Unix timestamp."""
-    s = raw.get("upload_date") or raw.get("release_date")
-    if s:
-        try:
-            return datetime.strptime(str(s), "%Y%m%d").date()
-        except ValueError:
-            pass
-    ts = raw.get("timestamp") or raw.get("release_timestamp")
-    if isinstance(ts, (int, float)):
-        return datetime.fromtimestamp(ts, tz=timezone.utc).date()
-    return None
+}
 
 
 def _res(f: Any) -> int:
@@ -50,6 +38,20 @@ def _best_video(videos: list[Any], max_res: int | None = None) -> Any:
         key=lambda f: (_res(f), f.get("ext") == "mp4", f.get("tbr") or 0),
         default=None,
     )
+
+
+def _pub_date(raw: Any) -> date | None:
+    """Publication date: upload_date ('YYYYMMDD'), else release_date, else a Unix timestamp."""
+    s = raw.get("upload_date") or raw.get("release_date")
+    if s:
+        try:
+            return datetime.strptime(str(s), "%Y%m%d").date()
+        except ValueError:
+            pass
+    ts = raw.get("timestamp") or raw.get("release_timestamp")
+    if isinstance(ts, (int, float)):
+        return datetime.fromtimestamp(ts, tz=timezone.utc).date()
+    return None
 
 
 def build_info(raw: Any) -> MediaInfo:

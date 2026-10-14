@@ -57,7 +57,9 @@ def _cookie_opts() -> Iterator[dict[str, Any]]:
         try:
             shutil.copyfile(COOKIE_FILE, copy)
         except OSError:
-            log.warning("Cannot read cookie file %s, continuing without it", COOKIE_FILE)
+            log.warning(
+                "Cannot read cookie file %s, continuing without it", COOKIE_FILE
+            )
             yield {}
             return
         yield {"cookiefile": str(copy)}
@@ -82,7 +84,11 @@ def _find_output(info: Any, dest_dir: Path) -> Path | None:
         if p and Path(p).exists():
             return Path(p)
     # Fallback: the largest finished file in the temp dir.
-    files = [p for p in dest_dir.iterdir() if p.is_file() and p.suffix not in (".part", ".ytdl")]
+    files = [
+        p
+        for p in dest_dir.iterdir()
+        if p.is_file() and p.suffix not in (".part", ".ytdl")
+    ]
     return max(files, key=lambda p: p.stat().st_size) if files else None
 
 
@@ -154,15 +160,24 @@ def download(
 
     try:
         # The cookie copy lives until YoutubeDL has closed (it saves cookies on close).
-        with _cookie_opts() as cookie_opts, YoutubeDL(cast(Any, {**opts, **cookie_opts})) as ydl:
+        with (
+            _cookie_opts() as cookie_opts,
+            YoutubeDL(cast(Any, {**opts, **cookie_opts})) as ydl,
+        ):
             info = ydl.extract_info(url, download=True)
     except DownloadFailed:
         raise
     except DownloadError as exc:
         if state["too_large"]:
-            raise DownloadFailed(ErrorCode.TOO_LARGE, "File exceeds the size limit.") from exc
+            raise DownloadFailed(
+                ErrorCode.TOO_LARGE, "File exceeds the size limit."
+            ) from exc
         msg = _clean_error(exc)
-        code = ErrorCode.UNSUPPORTED_SITE if "Unsupported URL" in msg else ErrorCode.DOWNLOAD_FAILED
+        code = (
+            ErrorCode.UNSUPPORTED_SITE
+            if "Unsupported URL" in msg
+            else ErrorCode.DOWNLOAD_FAILED
+        )
         raise DownloadFailed(code, msg) from exc
 
     if not info:
@@ -186,7 +201,9 @@ def download(
 
     title = entry.get("title") or "download"
     download_name = f"{sanitize_filename(title)[:100]}{path.suffix}"
-    return DownloadResult(path=path, title=title, download_name=download_name, size=size)
+    return DownloadResult(
+        path=path, title=title, download_name=download_name, size=size
+    )
 
 
 def fetch_info(url: str) -> Any:
@@ -200,11 +217,18 @@ def fetch_info(url: str) -> Any:
         "retries": 1,
     }
     try:
-        with _cookie_opts() as cookie_opts, YoutubeDL(cast(Any, {**opts, **cookie_opts})) as ydl:
+        with (
+            _cookie_opts() as cookie_opts,
+            YoutubeDL(cast(Any, {**opts, **cookie_opts})) as ydl,
+        ):
             info = ydl.extract_info(url, download=False)
     except DownloadError as exc:
         msg = _clean_error(exc)
-        code = ErrorCode.UNSUPPORTED_SITE if "Unsupported URL" in msg else ErrorCode.DOWNLOAD_FAILED
+        code = (
+            ErrorCode.UNSUPPORTED_SITE
+            if "Unsupported URL" in msg
+            else ErrorCode.DOWNLOAD_FAILED
+        )
         raise DownloadFailed(code, msg) from exc
 
     if not info:
