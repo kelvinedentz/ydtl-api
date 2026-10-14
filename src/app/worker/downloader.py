@@ -21,7 +21,7 @@ POT_BASE_URL = os.getenv("YTDLP_POT_BASE_URL", "http://pot-provider:4416")
 
 
 POT_EXTRACTOR_ARGS: dict[str, Any] = {
-    "youtubepot-bgutilhttp": {"base_url": POT_BASE_URL},
+    "youtubepot-bgutilhttp": {"base_url": [POT_BASE_URL]},
 }
 
 

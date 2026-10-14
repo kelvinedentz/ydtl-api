@@ -47,13 +47,17 @@ services:
   sweeper:
     <<: *app
     command: ["python", "-m", "app.worker.run", "sweeper"]
-    
+
   pot-provider:
-    image: brainicism/bgutil-ytdlp-pot-provider:latest
+    image: brainicism/bgutil-ytdlp-pot-provider:2.0.2
     healthcheck:
-      test: ["CMD-SHELL", "wget -qO- http://localhost:4416/ping || exit 1"]
+      test:
+        - CMD
+        - node
+        - -e
+        - "fetch('http://127.0.0.1:4416/ping').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
       interval: 10s
-      timeout: 3s
+      timeout: 5s
       retries: 5
       start_period: 15s
     restart: unless-stopped
