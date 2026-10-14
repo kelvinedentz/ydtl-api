@@ -5,6 +5,13 @@ x-app: &app
   env_file: ../.env
   environment:
     REDIS_URL: redis://redis:6379/0
+    YTDLP_COOKIES: /app/cookies.txt
+  volumes:
+    # cookies.txt must exist on the host (in the repo root) BEFORE `up`,
+    # otherwise Docker creates a directory with that name.
+    # Not read-only: yt-dlp writes refreshed cookies back to the file.
+    # Host file needs `chmod 666` because the container runs as a non-root user.
+    - ../cookies.txt:/app/cookies.txt
   depends_on:
     redis:
       condition: service_healthy
@@ -23,9 +30,15 @@ services:
       - --proxy-headers
       - --forwarded-allow-ips=*
     ports:
-      - "127.0.0.1:8000:8000" 
+      - "127.0.0.1:8000:8000"
     healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')",
+        ]
       interval: 30s
       timeout: 5s
       retries: 3
@@ -33,7 +46,7 @@ services:
   worker:
     <<: *app
     command: ["python", "-m", "app.worker.run", "worker"]
-    stop_grace_period: 120s   # lets a running download finish on shutdown
+    stop_grace_period: 120s # lets a running download finish on shutdown
 
   sweeper:
     <<: *app
