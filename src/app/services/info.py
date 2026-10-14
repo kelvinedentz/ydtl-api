@@ -4,7 +4,7 @@ from typing import Any, Literal
 from app.config import get_settings
 from app.models.schemas import AudioOption, MediaInfo, VideoQuality
 
-# Formats we re-encode to. Opus is not listed here: it is a stream copy, added in build_info.
+# Formats we re-encode to.
 AudioFormat = Literal["mp3", "m4a"]
 
 STANDARD_HEIGHTS = (1080, 720, 480, 360)
@@ -97,24 +97,6 @@ def build_info(raw: Any) -> MediaInfo:
         )
         for fmt, kbps in AUDIO_BITRATES.items()
     ]
-
-    # Opus is a stream copy, so its bitrate and size come from the real source stream.
-    # Only offered when the site actually has an Opus audio stream.
-    opus_src = max(
-        (f for f in audios if str(f.get("acodec") or "").startswith("opus")),
-        key=lambda f: f.get("abr") or f.get("tbr") or 0,
-        default=None,
-    )
-    if opus_src:
-        opus_kbps = int(opus_src.get("abr") or opus_src.get("tbr") or 0)
-        if opus_kbps:
-            audio.append(
-                AudioOption(
-                    format="opus",
-                    bitrate_kbps=opus_kbps,
-                    filesize=_size(opus_src, duration),
-                )
-            )
 
     thumbnail = raw.get("thumbnail")
     if not thumbnail and raw.get("thumbnails"):

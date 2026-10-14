@@ -22,10 +22,6 @@ _ANSI = re.compile(r"\x1b\[[0-9;]*m")
 # Mounted from the host by docker-compose. Optional: without it, yt-dlp runs without cookies.
 COOKIE_FILE = Path(os.getenv("YTDLP_COOKIES", "/app/cookies.txt"))
 
-# Target bitrates (kbps) for FFmpegExtractAudio. For "opus" this only applies when the
-# source is not already Opus; an Opus source is copied as-is (see download()).
-AUDIO_QUALITY = {"mp3": "192", "m4a": "256", "opus": "192"}
-
 
 class DownloadFailed(Exception):
     """Raised for any failed download. tasks.py stores code and message on the job."""
@@ -139,24 +135,25 @@ def download(
     }
 
     if media_type == MediaType.AUDIO:
-        if audio_format == "opus":
-            # Prefer a real Opus stream (YouTube's best audio). FFmpegExtractAudio sees
-            # that the codec already matches and copies it, so there is no quality loss
-            # and the result matches the bitrate and size that info.py reports.
-            # Sites without an Opus stream fall back to the best stream, encoded with
-            # libopus at AUDIO_QUALITY["opus"] kbps.
-            opts["format"] = "bestaudio[acodec^=opus]/bestaudio/best"
+        # Take the best available source (YouTube's best audio is Opus ~160k,
+        # better than the AAC ~128k stream), then encode to the target codec.
+        opts["format"] = "bestaudio/best"
+        if audio_format == "m4a":
+            opts["postprocessors"] = [
+                {
+                    "key": "FFmpegExtractAudio",
+                    "preferredcodec": "m4a",
+                    "preferredquality": "256",
+                }
+            ]
         else:
-            # Take the best available source (YouTube's best audio is Opus ~160k,
-            # better than the AAC ~128k stream), then encode to the target codec.
-            opts["format"] = "bestaudio/best"
-        opts["postprocessors"] = [
-            {
-                "key": "FFmpegExtractAudio",
-                "preferredcodec": audio_format,
-                "preferredquality": AUDIO_QUALITY.get(audio_format, "192"),
-            }
-        ]
+            opts["postprocessors"] = [
+                {
+                    "key": "FFmpegExtractAudio",
+                    "preferredcodec": audio_format,
+                    "preferredquality": "192",
+                }
+            ]
     else:
         opts["format"] = _video_format(quality)
         opts["merge_output_format"] = "mp4"
