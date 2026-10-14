@@ -7,6 +7,10 @@ RUN apt-get update \
 
 COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
 
+# Deno: the JS runtime yt-dlp uses to solve YouTube's signature/"n" challenges.
+# It is found on PATH automatically (only deno is enabled by default).
+COPY --from=denoland/deno:bin /deno /usr/local/bin/deno
+
 ENV UV_PYTHON_DOWNLOADS=never \
     UV_COMPILE_BYTECODE=1 \
     PYTHONUNBUFFERED=1 \
@@ -15,7 +19,8 @@ ENV UV_PYTHON_DOWNLOADS=never \
 
 WORKDIR /app
 
-# Dependencies first, so this layer is cached until pyproject.toml or uv.lock change
+# Dependencies first, so this layer is cached until pyproject.toml or uv.lock change.
+# pyproject.toml must list "yt-dlp[default]" so the challenge-solver scripts are installed.
 COPY pyproject.toml uv.lock ./
 RUN uv sync --frozen --no-dev --no-install-project
 
