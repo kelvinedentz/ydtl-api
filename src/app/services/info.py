@@ -1,5 +1,5 @@
 from typing import Any, Literal
-
+from datetime import date, datetime, timezone
 from app.config import get_settings
 from app.models.schemas import AudioOption, MediaInfo, VideoQuality
 
@@ -10,6 +10,20 @@ AUDIO_BITRATES: dict[AudioFormat, int] = {
     "mp3": 192,
     "m4a": 256,
 }  # must match downloader.py
+
+
+def _pub_date(raw: Any) -> date | None:
+    """Publication date: upload_date ('YYYYMMDD'), else release_date, else a Unix timestamp."""
+    s = raw.get("upload_date") or raw.get("release_date")
+    if s:
+        try:
+            return datetime.strptime(str(s), "%Y%m%d").date()
+        except ValueError:
+            pass
+    ts = raw.get("timestamp") or raw.get("release_timestamp")
+    if isinstance(ts, (int, float)):
+        return datetime.fromtimestamp(ts, tz=timezone.utc).date()
+    return None
 
 
 def _res(f: Any) -> int:
@@ -90,6 +104,7 @@ def build_info(raw: Any) -> MediaInfo:
         title=raw.get("title") or "Untitled",
         uploader=raw.get("uploader") or raw.get("channel"),
         view_count=raw.get("view_count"),
+        pub_date=_pub_date(raw),
         duration=duration,
         thumbnail=thumbnail,
         webpage_url=raw.get("webpage_url") or raw.get("original_url") or "",
